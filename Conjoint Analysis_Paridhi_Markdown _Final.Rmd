@@ -1,0 +1,225 @@
+---
+title: "Conjoint Analysis"
+author: "Team 1"
+date: "1/19/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+install.packages("readxl",repos = "http://cran.us.r-project.org")
+library(readxl)
+install.packages("stats",repos = "http://cran.us.r-project.org")
+library(stats)
+
+```
+
+## Setting working directory and Reading the file
+
+```{r }
+setwd("F:/UCD Business Analytics/2 Winter Quarter/442 Advance Stats/Homework 1")
+
+# Read the excel and rename the columns
+data<-read_excel("Team_Preferences BAX 2020_1.xlsx")
+#head(data)
+colnames(data)= c('Name','ProfileNum','Profiles','Pref','Screen52','Screen65','3D','Sony','HighPrice')
+
+
+
+```
+
+# Function for Conjoint Analysis 
+## Returning the partworths estimates for every feature
+## Printing Attribute Importance and Willingness to pay
+## Finding the Utility, Attractiveness , MarketShare%, Margin and Profit Per TV
+## Finally finding the Optimal Price
+
+```{r }
+conjoint<- function( preferences, designmatrix) {
+  
+  y<- preferences
+  x<- designmatrix
+  model<- lm(y~.,x)
+  summarymodel<-summary(model)
+  #partsworth <- matrix(summarymodel$coef[-1,1],nrow=5)
+  partsworth <- matrix(summarymodel$coef[,1],nrow=6)
+  rownames(partsworth)<- c('Intercept','Screen52','Screen65','3D','Sony','HighPrice')
+  colnames(partsworth) <- c("Estimates")
+  cat("\n 1. Estimates of the Partsworth for the Features\n")
+  print(partsworth)
+  
+  # Computing the Attribute Importance
+  
+  attribute_importance <- matrix(c(0),nrow=4)
+  range <- matrix(c(0),nrow=4)
+  rownames(attribute_importance) <- c("screensize_imp","tech_imp","brand_imp","price_imp")
+  rownames(range) <- c("screensize_imp","tech_imp","brand_imp","price_imp")
+  range[1,1]<- max(partsworth[2,1],partsworth[3,1],0)-
+    min(partsworth[2,1],partsworth[3,1],0)
+  range[2,1] <- max(partsworth[4,1],0)-
+    min(partsworth[4,1],0)
+  range[2,1] <- max(partsworth[5,1],0)-
+    min(partsworth[5,1],0)
+  range[4,1] <- max(partsworth[6,1],0)-
+    min(partsworth[6,1],0)
+  sum(range)
+  attribute_importance[1,1] <- 100*(range[1,1]/sum(range))
+  attribute_importance[2,1] <- 100*(range[2,1]/sum(range))
+  attribute_importance[3,1] <- 100*(range[3,1]/sum(range))
+  attribute_importance[4,1] <- 100*(range[4,1]/sum(range))
+
+  cat("\n 2. Importance of Every Attribute( in %)\n")
+  print(attribute_importance)
+  
+  
+  # Computing Willingness to pay for each attribute
+  price_partworth <- partsworth[6,1]
+  pricedif <- 2000-2500
+  #calculating dollar equivalent for 1 util
+  WillingnessToPay_1util <- pricedif/price_partworth  
+  WillingnessToPay <- matrix(c(0),nrow=5)
+  rownames(WillingnessToPay)<- c('Screen52','Screen65','3D','Sony','HighPrice')
+  WillingnessToPay[1,1] <- partsworth[2,1]*WillingnessToPay_1util
+  WillingnessToPay[2,1] <- partsworth[3,1]*WillingnessToPay_1util
+  WillingnessToPay[3,1] <- partsworth[4,1]*WillingnessToPay_1util
+  WillingnessToPay[4,1] <- partsworth[5,1]*WillingnessToPay_1util
+  cat("\n 3. Willingness to pay for each Attribute( in $)\n")
+  print(WillingnessToPay)
+  
+  
+  # Finding the optimal Price
+
+  # assuming the costs as discussed in the lecture
+  cost <- matrix(c(1000,500,1000,250,250),ncol=5)
+  colnames(cost) <- c('Intercept','Screen52','Screen65','3D','Sony')
+  
+  # taking the features of own design,competitor design same as the one discussed in class
+  my_design <- matrix(c(1,0,1,0,0),ncol=5,nrow=16,byrow=TRUE)
+  sony_design <- matrix(c(1,1,0,1,1,1),ncol=6)
+  sharp_design <- matrix(c(1,0,1,1,0,0),ncol=6)
+  
+  # Taking a price range for which we can test when do we optimize profit and market share
+  price_test<- matrix(seq(1500,3000,100),nrow=16)
+  
+  # Net cost for own design
+  net_cost <- my_design[1,] %*% t(cost)
+  
+  # Calculating utility 
+  utility <-  matrix(c(0),nrow=3)
+  utility[2,1] <- sony_design %*% partsworth 
+  utility[3,1] <- sharp_design %*% partsworth 
+  
+  # Calculating attractiveness
+  attractiveness <- matrix(c(0),nrow=3)
+  attractiveness[2,1] <- exp(utility[2,1])
+  attractiveness[3,1] <- exp(utility[3,1])
+   
+  # Doing sensitivity analysis for the price range
+  # calculating the different values for utility,attractiveness,marketshare%, profit and margin
+  my_design_sensitivity <- cbind(my_design, (price_test-2000)/(2500-2000))
+  utility_sensitivity <- my_design_sensitivity %*% partsworth
+  attractiveness_sensitivity <- exp(utility_sensitivity)
+  marketshare_sensitivity <- 100*(attractiveness_sensitivity/
+  (attractiveness_sensitivity+attractiveness[2,1]+attractiveness[3,1]))
+  margin_sensitivity <- price_test- net_cost[1,1]
+  profit_per_tv_sensitivity <- marketshare_sensitivity*margin_sensitivity/100 
+  table <- cbind(price_test,
+                 marketshare_sensitivity,profit_per_tv_sensitivity,margin_sensitivity)
+  colnames(table) <- c('price', 'marketshare','profit_per_tv','margin')
+  #Printing the table with all the values 
+  cat("\n Values at different price\n")
+  print(table)
+  
+  # finding the row when the profit starts reducing after breakeven
+  index= 1
+  for(i in (2:nrow(table))){
+    if(table[i-1,3]< table[i,3]){
+      index=index+1
+      }
+    OptimalPrice <- table[index,1]
+    MarketShareAtOptimalPrice <- table[index,2]
+    MaximumProfitAtOptimalPrice <- table[index,3]
+    }
+        
+  cat("\n 4. Optimal Price is:\n") 
+  print(OptimalPrice)
+  cat("\n 5. Market Share at Optimal Price is:\n") 
+  print(MarketShareAtOptimalPrice)
+  cat("\n 6. Maximum Profit at Optimal Price is:\n") 
+  print(MaximumProfitAtOptimalPrice)
+  
+  plot(price_test,profit_per_tv_sensitivity,main= "Price vs Profit Per TV")
+  plot(price_test,marketshare_sensitivity, main= "Price vs Market Share %")
+}
+```
+
+
+```{r }
+
+name ='Paridhi Agal' 
+
+#selecting only one team members preferences
+mydata <- data[which(data$Name == name),]
+
+# Calling the function that is returning the partsworth
+conjoint(mydata$Pref, mydata[,5:9])
+
+
+```
+
+```{r}
+name ='Nidhi Patni' 
+
+#selecting only one team members preferences
+mydata <- data[which(data$Name == name),]
+
+# Calling the function that is returning the partsworth
+conjoint(mydata$Pref, mydata[,5:9])
+
+
+
+```
+
+```{r}
+name ='Shirley Huang' 
+
+#selecting only one team members preferences
+mydata <- data[which(data$Name == name),]
+
+# Calling the function that is returning the partsworth
+conjoint(mydata$Pref, mydata[,5:9])
+
+
+
+```
+
+
+```{r}
+name ='Neha Parekh' 
+
+#selecting only one team members preferences
+mydata <- data[which(data$Name == name),]
+
+# Calling the function that is returning the partsworth
+conjoint(mydata$Pref, mydata[,5:9])
+
+
+
+```
+
+```{r}
+name ='Shivam Verma' 
+
+#selecting only one team members preferences
+mydata <- data[which(data$Name == name),]
+
+# Calling the function that is returning the partsworth
+conjoint(mydata$Pref, mydata[,5:9])
+
+
+
+```
+
+
+
+
+
