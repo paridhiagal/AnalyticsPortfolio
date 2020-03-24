@@ -1,0 +1,274 @@
+---
+title: "AdvStas_HW4"
+author: "Paridhi Agal"
+date: "2/19/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("forecast")
+library("tseries") 
+
+```
+
+# 1. Step-by-Step fit different ARIMA (p,d,q) x (P, D, Q) for FAANG stock price series. Can you discover a better model than auto.arima?
+
+# 2. Select the best model using information criteria (AIC, AICC, BIC), and present out-of-sample forecasts with prediction intervals
+
+# 3. Discover a set of good models. Try combining forecasts from a few good models. 
+
+
+
+
+```{r}
+setwd("F:/UCD Business Analytics/2 Winter Quarter/442 Advance Stats/Homework 4/HW4 Data")
+apple<-read.csv("aapl.csv", sep=",",dec=".",header=T) 	# daily data
+names(apple)
+head(apple,5)
+amazon<-read.csv("amzn.csv", sep=",",dec=".",header=T) 	# daily data
+names(amazon)
+head(amazon,5)
+fb<-read.csv("FB.csv", sep=",",dec=".",header=T) 	# daily data
+names(fb)
+head(fb,5)
+google<-read.csv("goog.csv", sep=",",dec=".",header=T) 	# daily data
+names(google)
+tail(google,5)
+netflix<-read.csv("nflx.csv", sep=",",dec=".",header=T) 	# daily data
+names(netflix)
+tail(netflix,5)
+```
+
+```{r}
+#apple[,1]
+str(apple)
+
+```
+
+
+```{r}
+yy_t = cbind(apple[,1],apple[,5], amazon[,5],fb[,5],google[,5],netflix[,5])
+head(yy_t)
+
+```
+
+
+
+```{r}
+inds= seq(as.Date("2019-02-11"),as.Date("2020-02-07"), by="day")
+set.seed(50)
+yy_apple = ts(apple[,5], frequency = 365,start = c(2019,as.numeric(format(inds[1],"%j"))))		# coverts sales data as time series object with start date and frequency (daily here)
+plot.ts(yy_apple)	
+yy_amazon = ts(amazon[,5], frequency = 365,start = c(2019,as.numeric(format(inds[1],"%j"))))		# coverts sales data as time series object with start date and frequency (daily here)
+plot.ts(yy_amazon)	
+yy_fb = ts(fb[,5], frequency = 365,start = c(2019,as.numeric(format(inds[1],"%j"))))		# coverts sales data as time series object with start date and frequency (daily here)
+plot.ts(yy_fb)	
+yy_google = ts(google[,5], frequency = 365,start = c(2019,as.numeric(format(inds[1],"%j"))))		# coverts sales data as time series object with start date and frequency (daily here)
+plot.ts(yy_google)	
+yy_netflix = ts(netflix[,5], frequency = 365,start = c(2019,as.numeric(format(inds[1],"%j"))))		# coverts sales data as time series object with start date and frequency (daily here)
+plot.ts(yy_netflix)	
+```
+
+
+
+
+```{r}
+yy = cbind(yy_apple, yy_amazon,yy_fb,yy_google,yy_netflix)
+head(yy)
+
+```
+
+```{r}
+yd= data.frame(matrix(0, nrow=250, ncol= 5))
+colnames(yd) = c("apple", "amazon", "fb", "google","netflix")
+for (i in seq(1,5,1)){
+  adf.test(yy[,i])
+  yd[,i] = diff(yy[,i],differences = 1)			
+  plot.ts(yd[,i])	# looks stationary visually but test it
+  adf.test(yd[,i])
+  #x['p.value']
+}
+
+```
+
+```{r}
+#for q
+for (i in seq(1,5,1)){
+  Acf(yd[,i], lag.max = 10, main= colnames(yd)[i])
+}
+
+# q for ma is 1 for all
+```
+
+
+
+```{r}
+# adf.test(yd[,5])
+# for p
+for (i in seq(1,5,1)){
+  Pacf(yd[,i], lag.max = 10, main= colnames(yd)[i])
+}
+
+# p for AR is 0 for all
+```
+
+p = non-seasonal AR order, d = non-seasonal differencing, q = non-seasonal MA order, P = seasonal AR order, D = seasonal differencing, Q = seasonal MA order, and S = time span of repeating seasonal pattern
+
+
+```{r}
+
+
+```
+
+## 
+```{r}
+m1_apple = Arima(yy_apple, order=c(2,1,2), seasonal= list(order= c(0,1,1), period= 60))
+m1_apple
+
+
+```
+
+```{r}
+m2_amazon = Arima(yy[,2], order=c(1,1,0), seasonal= list(order= c(0,1,1), period= 120))
+m2_amazon
+
+
+```
+
+```{r}
+m3_fb = Arima(yy[,3], order=c(0,1,0), seasonal= list(order= c(0,1,1), period= 60))
+m3_fb
+
+
+```
+
+
+```{r}
+m4_google = Arima(yy[,4], order=c(0,1,0), seasonal= list(order= c(0,1,1), period= 60))
+m4_google
+
+
+```
+
+
+```{r}
+m5_netflix = Arima(yy[,5], order=c(1,1,1), seasonal= list(order= c(0,1,1), period= 60))
+m5_netflix
+
+
+```
+
+
+```{r}
+# auto arima for apple
+
+aa1 = auto.arima(yy[,1])
+aa1
+```
+
+
+
+```{r}
+# auto arima for amazon
+
+aa2 = auto.arima(yy[,2])
+aa2
+```
+
+
+```{r}
+# auto arima for fb
+
+aa3 = auto.arima(yy[,3])
+aa3
+```
+
+```{r}
+# auto arima for google
+
+aa4 = auto.arima(yy[,4])
+aa4
+```
+
+
+```{r}
+google_predict_auto = forecast:::forecast.Arima(aa4, h = 14 , level = c(68, 90) )
+#plot(google_predict_auto)
+#google_predict_auto
+```
+
+
+```{r}
+# auto arima for netflix
+
+aa5 = auto.arima(yy[,5])
+aa5
+```
+
+Predict for Feb 24 to Feb28th , but Feb 17th was a holiday so predictiing  so 10 to 14 is the level
+
+
+```{r}
+
+apple_predict = forecast:::forecast.Arima(m1_apple, h = 14 , level = c(68, 90) )
+plot(apple_predict)
+apple_predict
+final = data.frame(matrix(0,nrow=5,ncol=6))
+colnames(final)= c("2020-02-21","2020-02-24","2020-02-25","2020-02-26","2020-02-27","2020-02-28")
+rownames(final) = c("apple", "amazon", "fb", "google","netflix")
+final[1,]= as.numeric(apple_predict$mean)[9:14]
+final
+#c(302, 306)
+```
+
+```{r}
+
+amazon_predict = forecast:::forecast.Arima(m2_amazon, h = 14 , level = c(68, 90) )
+plot(amazon_predict)
+amazon_predict
+final[2,]= as.numeric(amazon_predict$mean)[9:14]
+final
+#c(302, 306)
+```
+
+```{r}
+
+fb_predict = forecast:::forecast.Arima(m3_fb, h = 14 , level = c(68, 90) )
+plot(fb_predict)
+fb_predict
+final[3,]= as.numeric(fb_predict$mean)[9:14]
+final
+#c(302, 306)
+```
+
+```{r}
+
+google_predict = forecast:::forecast.Arima(m4_google, h = 14 , level = c(68, 90) )
+plot(google_predict)
+google_predict
+final[4,]= as.numeric(google_predict$mean)[9:14]
+final
+#c(302, 306)
+```
+
+
+```{r}
+
+netflix_predict = forecast:::forecast.Arima(m5_netflix, h = 14 , level = c(68, 90) )
+plot(netflix_predict)
+netflix_predict
+final[5,]= as.numeric(netflix_predict$mean)[9:14]
+final
+#c(302, 306)
+```
+
+```{r}
+final[1,]= final[1,]-13
+final[5,] = final[5,]+c(10,10,10,10,10)
+
+```
+
+```{r}
+dplyr::select(final,-1)
+```
